@@ -1,0 +1,22 @@
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variables de entorno y secretos
+.env
+.env.local
+
+# Bases de datos locales (si usaras SQLite, aunque usas Postgres)
+*.sqlite3
+*.db
+
+# Archivos del sistema operativo (Mac/Windows)
+.DS_Store
+Thumbs.db
