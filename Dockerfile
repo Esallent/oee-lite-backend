@@ -31,5 +31,5 @@ USER appuser
 # Expone el puerto que espera Cloud Run (por defecto 8080)
 EXPOSE 8080
 
-# Comando de inicio usando Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Cambiamos main:app por app.main:app (porque está en la carpeta app)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
