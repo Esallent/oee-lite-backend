@@ -32,4 +32,4 @@ USER appuser
 EXPOSE 8080
 
 # Cambiamos main:app por app.main:app (porque está en la carpeta app)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "app"]
