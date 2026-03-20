@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, UploadFile, File
 from sqlmodel import Session, select
 from app.core.database import get_session
-from app.models.domain import Estacion, MotivoParada, Operario, Turno, MaestroSKU, OrdenProduccion
+from app.models.domain import Estacion, MotivoParada, Operario, Turno, MaestroSKU, OrdenProduccion, Linea, Supervisor
 from pydantic import BaseModel
 from typing import Optional
 import uuid
@@ -30,8 +30,15 @@ def crear_estacion(estacion: Estacion, db: Session = Depends(get_session)):
     return estacion
 
 @router.get("/estaciones/", response_model=list[Estacion])
-def obtener_estaciones(tenant_id: str, db: Session = Depends(get_session)):
-    return db.exec(select(Estacion).where(Estacion.tenant_id == tenant_id)).all()
+def obtener_estaciones(
+    tenant_id: str, 
+    linea_id: Optional[uuid.UUID] = None, 
+    db: Session = Depends(get_session)
+):
+    query = select(Estacion).where(Estacion.tenant_id == tenant_id)
+    if linea_id:
+        query = query.where(Estacion.linea_id == linea_id)
+    return db.exec(query).all()
 
 @router.patch("/estaciones/{estacion_id}", response_model=Estacion)
 def actualizar_estacion(
@@ -89,13 +96,54 @@ def obtener_operarios(tenant_id: str = "empresa_demo", db: Session = Depends(get
     """Lista todos los operarios activos"""
     return db.exec(select(Operario).where(Operario.tenant_id == tenant_id)).all()
 
+# ==========================================
+# ABM DE TURNOS (Nuevo)
+# ==========================================
 @router.post("/turnos/", response_model=Turno)
 def crear_turno(turno: Turno, db: Session = Depends(get_session)):
-    """Crea una franja horaria de trabajo (Ej: Turno Mañana)"""
     db.add(turno)
     db.commit()
     db.refresh(turno)
     return turno
+
+@router.get("/turnos/", response_model=list[Turno])
+def obtener_turnos(
+    tenant_id: str, 
+    linea_id: Optional[uuid.UUID] = None, 
+    db: Session = Depends(get_session)
+):
+    query = select(Turno).where(Turno.tenant_id == tenant_id)
+    if linea_id:
+        query = query.where(Turno.linea_id == linea_id)
+    return db.exec(query).all()
+
+# ==========================================
+# ABM DE LÍNEAS
+# ==========================================
+@router.post("/lineas/", response_model=Linea)
+def crear_linea(linea: Linea, db: Session = Depends(get_session)):
+    db.add(linea)
+    db.commit()
+    db.refresh(linea)
+    return linea
+
+@router.get("/lineas/", response_model=list[Linea])
+def obtener_lineas(tenant_id: str, db: Session = Depends(get_session)):
+    return db.exec(select(Linea).where(Linea.tenant_id == tenant_id)).all()
+
+# ==========================================
+# ABM DE SUPERVISORES (NUEVO)
+# ==========================================
+@router.post("/supervisores/", response_model=Supervisor)
+def crear_supervisor(supervisor: Supervisor, db: Session = Depends(get_session)):
+    db.add(supervisor)
+    db.commit()
+    db.refresh(supervisor)
+    return supervisor
+
+@router.get("/supervisores/", response_model=list[Supervisor])
+def obtener_supervisores(tenant_id: str = "empresa_demo", db: Session = Depends(get_session)):
+    return db.exec(select(Supervisor).where(Supervisor.tenant_id == tenant_id)).all()
 
 # ==========================================
 # IMPORTADORES MASIVOS (FASE 2)
