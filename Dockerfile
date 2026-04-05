@@ -31,5 +31,8 @@ USER appuser
 # Expone el puerto que espera Cloud Run (por defecto 8080)
 EXPOSE 8080
 
-# Cambiamos main:app por app.main:app (porque está en la carpeta app)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "app"]
+# Le decimos a Python que la carpeta raíz es /app para que encuentre tus módulos
+ENV PYTHONPATH=/app
+
+# Como main.py está en la raíz (/app/main.py), ejecutamos directamente main:app sin --app-dir
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
