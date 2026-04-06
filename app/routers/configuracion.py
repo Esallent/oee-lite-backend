@@ -1,16 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, UploadFile, File
 from sqlmodel import Session, select
 from app.core.database import get_session
-from app.models.domain import Estacion, MotivoParada, Operario, Turno, MaestroSKU, OrdenProduccion
+from app.models.domain import Estacion, MotivoParada, Operario, Turno, MaestroSKU, OrdenProduccion, Linea, Supervisor, TipoParada
 from pydantic import BaseModel
 from typing import Optional
+from datetime import time
 import uuid
 import pandas as pd
 import io
 
 router = APIRouter(tags=["Configuracion y Maestros"])
 
-# --- MOLDES ---
+# ==========================================
+# --- MOLDES UPDATE (Para Edición Parcial) ---
+# ==========================================
 class EstacionUpdate(BaseModel):
     nombre: Optional[str] = None
     tipo: Optional[str] = None
@@ -21,7 +24,31 @@ class EstacionUpdate(BaseModel):
     posicion_linea: Optional[int] = None
     ramal: Optional[str] = None
 
-# --- ENDPOINTS ---
+class LineaUpdate(BaseModel):
+    nombre: Optional[str] = None
+
+class OperarioUpdate(BaseModel):
+    legajo: Optional[str] = None
+    nombre_completo: Optional[str] = None
+
+class SupervisorUpdate(BaseModel):
+    legajo: Optional[str] = None
+    nombre_completo: Optional[str] = None
+
+class TurnoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    hora_inicio: Optional[time] = None
+    hora_fin: Optional[time] = None
+    linea_id: Optional[uuid.UUID] = None
+    descanso_minutos: Optional[int] = None
+
+class MotivoParadaUpdate(BaseModel):
+    nombre: Optional[str] = None
+    tipo_parada: Optional[TipoParada] = None
+
+# ==========================================
+# ABM DE ESTACIONES
+# ==========================================
 @router.post("/estaciones/", response_model=Estacion)
 def crear_estacion(estacion: Estacion, db: Session = Depends(get_session)):
     db.add(estacion)
@@ -39,33 +66,25 @@ def actualizar_estacion(
     datos_update: EstacionUpdate = None,
     db: Session = Depends(get_session)
 ):
-    """
-    Permite modificar dinámicamente los parámetros de una estación (ej. umbrales de tiempo).
-    Solo se actualizan los campos que se envían en el JSON.
-    """
-    # 1. Buscamos la estación existente
     estacion_db = db.get(Estacion, estacion_id)
     if not estacion_db:
         raise HTTPException(status_code=404, detail="Estación no encontrada")
     
-    # 2. Extraemos solo los datos que nos enviaron para cambiar
     update_data = datos_update.model_dump(exclude_unset=True) 
     
-    # 3. Aplicamos los cambios uno por uno
     for key, value in update_data.items():
         setattr(estacion_db, key, value)
         
-    # 4. Guardamos en la base de datos
     db.add(estacion_db)
     db.commit()
     db.refresh(estacion_db)
-    
     return estacion_db
 
-
+# ==========================================
+# ABM DE MOTIVOS DE PARADA
+# ==========================================
 @router.post("/motivos-parada/", response_model=MotivoParada)
 def crear_motivo_parada(motivo: MotivoParada, db: Session = Depends(get_session)):
-    """Crea un motivo de parada indicando si es PLANIFICADA o NO_PLANIFICADA"""
     db.add(motivo)
     db.commit()
     db.refresh(motivo)
@@ -73,12 +92,32 @@ def crear_motivo_parada(motivo: MotivoParada, db: Session = Depends(get_session)
 
 @router.get("/motivos-parada/", response_model=list[MotivoParada])
 def obtener_motivos_parada(tenant_id: str, db: Session = Depends(get_session)):
-    """Lista todos los motivos de parada configurados para la empresa"""
     return db.exec(select(MotivoParada).where(MotivoParada.tenant_id == tenant_id)).all()
 
+@router.patch("/motivos-parada/{motivo_id}", response_model=MotivoParada)
+def actualizar_motivo_parada(
+    motivo_id: uuid.UUID = Path(..., description="El ID del motivo a editar"),
+    datos_update: MotivoParadaUpdate = None,
+    db: Session = Depends(get_session)
+):
+    motivo_db = db.get(MotivoParada, motivo_id)
+    if not motivo_db:
+        raise HTTPException(status_code=404, detail="Motivo no encontrado")
+    
+    update_data = datos_update.model_dump(exclude_unset=True) 
+    for key, value in update_data.items():
+        setattr(motivo_db, key, value)
+        
+    db.add(motivo_db)
+    db.commit()
+    db.refresh(motivo_db)
+    return motivo_db
+
+# ==========================================
+# ABM DE OPERARIOS
+# ==========================================
 @router.post("/operarios/", response_model=Operario)
 def crear_operario(operario: Operario, db: Session = Depends(get_session)):
-    """Da de alta un nuevo operario en la planta"""
     db.add(operario)
     db.commit()
     db.refresh(operario)
@@ -86,9 +125,30 @@ def crear_operario(operario: Operario, db: Session = Depends(get_session)):
 
 @router.get("/operarios/", response_model=list[Operario])
 def obtener_operarios(tenant_id: str = "empresa_demo", db: Session = Depends(get_session)):
-    """Lista todos los operarios activos"""
     return db.exec(select(Operario).where(Operario.tenant_id == tenant_id)).all()
 
+@router.patch("/operarios/{operario_id}", response_model=Operario)
+def actualizar_operario(
+    operario_id: uuid.UUID = Path(..., description="El ID del operario a editar"),
+    datos_update: OperarioUpdate = None,
+    db: Session = Depends(get_session)
+):
+    operario_db = db.get(Operario, operario_id)
+    if not operario_db:
+        raise HTTPException(status_code=404, detail="Operario no encontrado")
+    
+    update_data = datos_update.model_dump(exclude_unset=True) 
+    for key, value in update_data.items():
+        setattr(operario_db, key, value)
+        
+    db.add(operario_db)
+    db.commit()
+    db.refresh(operario_db)
+    return operario_db
+
+# ==========================================
+# ABM DE TURNOS
+# ==========================================
 @router.post("/turnos/", response_model=Turno)
 def crear_turno(turno: Turno, db: Session = Depends(get_session)):
     """Crea una franja horaria de trabajo (Ej: Turno Mañana)"""
@@ -96,6 +156,102 @@ def crear_turno(turno: Turno, db: Session = Depends(get_session)):
     db.commit()
     db.refresh(turno)
     return turno
+
+@router.get("/turnos/", response_model=list[Turno])
+def obtener_turnos(
+    tenant_id: str, 
+    linea_id: Optional[uuid.UUID] = None, 
+    db: Session = Depends(get_session)
+):
+    query = select(Turno).where(Turno.tenant_id == tenant_id)
+    if linea_id:
+        query = query.where(Turno.linea_id == linea_id)
+    return db.exec(query).all()
+
+@router.patch("/turnos/{turno_id}", response_model=Turno)
+def actualizar_turno(
+    turno_id: uuid.UUID = Path(..., description="El ID del turno a editar"),
+    datos_update: TurnoUpdate = None,
+    db: Session = Depends(get_session)
+):
+    turno_db = db.get(Turno, turno_id)
+    if not turno_db:
+        raise HTTPException(status_code=404, detail="Turno no encontrado")
+    
+    update_data = datos_update.model_dump(exclude_unset=True) 
+    for key, value in update_data.items():
+        setattr(turno_db, key, value)
+        
+    db.add(turno_db)
+    db.commit()
+    db.refresh(turno_db)
+    return turno_db
+
+# ==========================================
+# ABM DE LÍNEAS
+# ==========================================
+@router.post("/lineas/", response_model=Linea)
+def crear_linea(linea: Linea, db: Session = Depends(get_session)):
+    db.add(linea)
+    db.commit()
+    db.refresh(linea)
+    return linea
+
+@router.get("/lineas/", response_model=list[Linea])
+def obtener_lineas(tenant_id: str, db: Session = Depends(get_session)):
+    return db.exec(select(Linea).where(Linea.tenant_id == tenant_id)).all()
+
+@router.patch("/lineas/{linea_id}", response_model=Linea)
+def actualizar_linea(
+    linea_id: uuid.UUID = Path(..., description="El ID de la línea a editar"),
+    datos_update: LineaUpdate = None,
+    db: Session = Depends(get_session)
+):
+    linea_db = db.get(Linea, linea_id)
+    if not linea_db:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    
+    update_data = datos_update.model_dump(exclude_unset=True) 
+    for key, value in update_data.items():
+        setattr(linea_db, key, value)
+        
+    db.add(linea_db)
+    db.commit()
+    db.refresh(linea_db)
+    return linea_db
+
+# ==========================================
+# ABM DE SUPERVISORES
+# ==========================================
+@router.post("/supervisores/", response_model=Supervisor)
+def crear_supervisor(supervisor: Supervisor, db: Session = Depends(get_session)):
+    db.add(supervisor)
+    db.commit()
+    db.refresh(supervisor)
+    return supervisor
+
+@router.get("/supervisores/", response_model=list[Supervisor])
+def obtener_supervisores(tenant_id: str = "empresa_demo", db: Session = Depends(get_session)):
+    return db.exec(select(Supervisor).where(Supervisor.tenant_id == tenant_id)).all()
+
+@router.patch("/supervisores/{supervisor_id}", response_model=Supervisor)
+def actualizar_supervisor(
+    supervisor_id: uuid.UUID = Path(..., description="El ID del supervisor a editar"),
+    datos_update: SupervisorUpdate = None,
+    db: Session = Depends(get_session)
+):
+    supervisor_db = db.get(Supervisor, supervisor_id)
+    if not supervisor_db:
+        raise HTTPException(status_code=404, detail="Supervisor no encontrado")
+    
+    update_data = datos_update.model_dump(exclude_unset=True) 
+    for key, value in update_data.items():
+        setattr(supervisor_db, key, value)
+        
+    db.add(supervisor_db)
+    db.commit()
+    db.refresh(supervisor_db)
+    return supervisor_db
 
 # ==========================================
 # IMPORTADORES MASIVOS (FASE 2)
@@ -106,7 +262,6 @@ def importar_maestro_skus(
     file: UploadFile = File(...), 
     db: Session = Depends(get_session)
 ):
-    """Sincroniza el catálogo de SKUs desde Excel/CSV."""
     contenido = file.file.read()
     try:
         if file.filename.lower().endswith('.csv'):
@@ -116,7 +271,6 @@ def importar_maestro_skus(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error de lectura: {str(e)}")
 
-    # Limpieza de columnas
     df.columns = [str(c).replace('\ufeff', '').replace(';', '').strip().upper() for c in df.columns]
     
     if "SKU" not in df.columns or "DESCRIPCION" not in df.columns:
@@ -145,7 +299,6 @@ def importar_plan_produccion(
     file: UploadFile = File(...), 
     db: Session = Depends(get_session)
 ):
-    """Carga el plan de producción diario con los campos exactos de la DB."""
     contenido = file.file.read()
     try:
         df = pd.read_csv(io.BytesIO(contenido), sep=None, engine='python', header=None, encoding='utf-8-sig')
@@ -193,7 +346,6 @@ def crear_orden_manual(orden: OrdenProduccion, db: Session = Depends(get_session
 
 @router.post("/setup-springwall/")
 def setup_springwall(tenant_id: str = "empresa_demo", db: Session = Depends(get_session)):
-    """Carga las estaciones predeterminadas de la fábrica."""
     viejas = db.exec(select(Estacion).where(Estacion.tenant_id == tenant_id)).all()
     for v in viejas: db.delete(v)
     db.commit()
@@ -224,10 +376,6 @@ def setup_springwall(tenant_id: str = "empresa_demo", db: Session = Depends(get_
 
 @router.delete("/reset-db-danger/")
 def reset_base_de_datos():
-    """
-    ¡PELIGRO! Solo para desarrollo. 
-    Borra TODA la base de datos y la recrea.
-    """
     from app.core.database import engine
     from sqlmodel import SQLModel
     try:
