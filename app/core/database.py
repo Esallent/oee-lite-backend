@@ -1,10 +1,13 @@
-from sqlmodel import create_engine, Session
+from sqlmodel import SQLModel, create_engine, Session
 from app.core.config import settings
 
-# echo=True imprime las consultas SQL en la consola (ideal para ver qué hace por detrás)
+# El engine usa la URL de tu .env que ya comprobamos que funciona
 engine = create_engine(settings.DATABASE_URL, echo=True)
 
+def create_db_and_tables():
+    # Esta es la línea mágica que crea las tablas en Postgres
+    SQLModel.metadata.create_all(engine)
+
 def get_session():
-    """Generador de sesiones para inyectar en los endpoints de FastAPI."""
     with Session(engine) as session:
         yield session

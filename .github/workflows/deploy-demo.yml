@@ -1,0 +1,51 @@
+name: Deploy Frontend DEMO
+
+on:
+  push:
+    branches:
+      - demo
+
+env:
+  PROJECT_ID: 'oee-control'
+  REGION: 'us-central1'
+  REPO_NAME: 'oeelite-frontend' # Apuntamos al repo de Docker del Front
+  SERVICE_NAME: 'demo-oeelite'  # Nombre de tu servicio en Cloud Run
+  WIF_PROVIDER: 'projects/15861740515/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+  WIF_SA: 'github-deploy-sa@oee-control.iam.gserviceaccount.com'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SA }}'
+
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image $IMAGE_TAG \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --allow-unauthenticated \
+            --port 8080 
+            # (Nota: Asegúrate de que el Dockerfile de Lovable exponga el puerto 8080)

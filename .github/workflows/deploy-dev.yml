@@ -1,0 +1,55 @@
+name: Deploy Backend DEV
+
+on:
+  push:
+    branches:
+      - dev
+
+env:
+  PROJECT_ID: 'oee-control'
+  REGION: 'us-central1'
+  REPO_NAME: 'oeelite-backend'
+  SERVICE_NAME: 'api-oeelite-dev'
+  WIF_PROVIDER: 'projects/15861740515/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+  WIF_SA: 'github-deploy-sa@oee-control.iam.gserviceaccount.com'
+  DB_INSTANCE: 'oee-control:us-central1:oeelite-db-dev'
+
+jobs:
+  deploy:
+    name: Build and Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write' # Clave de seguridad para WIF
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: '${{ env.WIF_PROVIDER }}'
+          service_account: '${{ env.WIF_SA }}'
+
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image $IMAGE_TAG \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --add-cloudsql-instances ${{ env.DB_INSTANCE }} \
+            --set-secrets="DATABASE_URL=DEV_DATABASE_URL:latest" \
+            --allow-unauthenticated \
+            --port 8080

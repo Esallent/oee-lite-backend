@@ -57,8 +57,15 @@ def crear_estacion(estacion: Estacion, db: Session = Depends(get_session)):
     return estacion
 
 @router.get("/estaciones/", response_model=list[Estacion])
-def obtener_estaciones(tenant_id: str, db: Session = Depends(get_session)):
-    return db.exec(select(Estacion).where(Estacion.tenant_id == tenant_id)).all()
+def obtener_estaciones(
+    tenant_id: str, 
+    linea_id: Optional[uuid.UUID] = None, 
+    db: Session = Depends(get_session)
+):
+    query = select(Estacion).where(Estacion.tenant_id == tenant_id)
+    if linea_id:
+        query = query.where(Estacion.linea_id == linea_id)
+    return db.exec(query).all()
 
 @router.patch("/estaciones/{estacion_id}", response_model=Estacion)
 def actualizar_estacion(
@@ -151,7 +158,6 @@ def actualizar_operario(
 # ==========================================
 @router.post("/turnos/", response_model=Turno)
 def crear_turno(turno: Turno, db: Session = Depends(get_session)):
-    """Crea una franja horaria de trabajo (Ej: Turno Mañana)"""
     db.add(turno)
     db.commit()
     db.refresh(turno)
