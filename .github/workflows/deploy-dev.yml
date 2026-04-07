@@ -1,0 +1,54 @@
+name: Deploy Backend DEV
+
+on:
+  push:
+    branches:
+      - dev
+
+env:
+  PROJECT_ID: oee-control
+  REGION: us-central1
+  SERVICE_NAME: api-oeelite-dev
+  DB_INSTANCE: oee-control:us-central1:oeelite-db-dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/15861740515/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'github-deploy-sa@oee-control.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and Push Container
+        run: |
+          IMAGE_TAG="us-central1-docker.pkg.dev/$PROJECT_ID/oeelite-backend/$SERVICE_NAME:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_TAG="us-central1-docker.pkg.dev/$PROJECT_ID/oeelite-backend/$SERVICE_NAME:${{ github.sha }}"
+          gcloud run deploy $SERVICE_NAME \
+            --image $IMAGE_TAG \
+            --region $REGION \
+            --project $PROJECT_ID \
+            --add-cloudsql-instances $DB_INSTANCE \
+            --set-secrets="DATABASE_URL=DEV_DATABASE_URL:latest" \
+            --allow-unauthenticated \
+            --port 8080
