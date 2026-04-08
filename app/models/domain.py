@@ -28,6 +28,29 @@ class TenantBase(SQLModel):
     tenant_id: str = Field(index=True, description="ID del cliente/tenant")
 
 # ==========================================
+# 2.5 ACCESO SAAS (Usuarios B2B)
+# ==========================================
+class RolUsuario(str, Enum):
+    SUPERADMIN = "superadmin"
+    GERENCIA = "gerencia"
+    PRODUCCION = "produccion"
+    SUPERVISOR = "supervisor"
+    OPERARIO = "operario"
+
+class UsuarioSaaS(SQLModel, table=True):
+    __tablename__ = "usuarios_saas"
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    auth0_id: str = Field(unique=True, index=True, description="ID exacto que viene del token de Auth0 (sub)")
+    tenant_id: str = Field(index=True, description="Ej: springwall, tyme_core")
+    email: Optional[str] = Field(default=None, description="Email del usuario")
+    rol: RolUsuario = Field(default=RolUsuario.SUPERVISOR)
+    activo: bool = Field(default=True)
+    
+    # --- NUEVOS CAMPOS ---
+    nombre: Optional[str] = Field(default=None, description="Nombre del usuario")
+    apellido: Optional[str] = Field(default=None, description="Apellido del usuario")
+
+# ==========================================
 # 3. PLANTA FÍSICA Y PERSONAL
 # ==========================================
 class Linea(TenantBase, table=True):
